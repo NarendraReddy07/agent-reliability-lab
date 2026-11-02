@@ -1,3 +1,4 @@
+
 from sqlalchemy.orm import Session
 
 from backend.app.models import (
@@ -9,15 +10,14 @@ from backend.app.schemas import EvaluationRequest
 
 
 def normalize_text(value: str) -> str:
-    """Normalize text for case-insensitive exact comparison."""
     return " ".join(value.strip().lower().split())
 
 
-def evaluate_exact_match(expected: str, actual: str) -> tuple[float, bool, str]:
-    expected_normalized = normalize_text(expected)
-    actual_normalized = normalize_text(actual)
-
-    passed = expected_normalized == actual_normalized
+def evaluate_exact_match(
+    expected: str,
+    actual: str,
+) -> tuple[float, bool, str]:
+    passed = normalize_text(expected) == normalize_text(actual)
 
     return (
         1.0 if passed else 0.0,
@@ -28,33 +28,41 @@ def evaluate_exact_match(expected: str, actual: str) -> tuple[float, bool, str]:
     )
 
 
-def evaluate_keyword_match(expected: str, actual: str) -> tuple[float, bool, str]:
+def evaluate_keyword_match(
+    expected: str,
+    actual: str,
+) -> tuple[float, bool, str]:
+    import re
+
     keywords = {
-        word.strip(".,!?;:()[]{}\"'").lower()
-        for word in expected.split()
-        if len(word.strip(".,!?;:()[]{}\"'")) > 2
+        word.lower()
+        for word in re.findall(r"\b\w+\b", expected)
+        if len(word) > 2
     }
 
     actual_words = {
-        word.strip(".,!?;:()[]{}\"'").lower()
-        for word in actual.split()
+        word.lower()
+        for word in re.findall(r"\b\w+\b", actual)
     }
 
     if not keywords:
-        return 0.0, False, "No evaluable keywords found in expected output."
+        return 0.0, False, "No evaluable keywords found."
 
     matched = keywords.intersection(actual_words)
     score = len(matched) / len(keywords)
     passed = score >= 0.8
 
-    details = (
-        f"Matched {len(matched)} of {len(keywords)} expected keywords."
+    return (
+        round(score, 4),
+        passed,
+        f"Matched {len(matched)} of {len(keywords)} expected keywords.",
     )
 
-    return round(score, 4), passed, details
 
-
-def evaluate_similarity(expected: str, actual: str) -> tuple[float, bool, str]:
+def evaluate_similarity(
+    expected: str,
+    actual: str,
+) -> tuple[float, bool, str]:
     from difflib import SequenceMatcher
 
     score = SequenceMatcher(
@@ -70,6 +78,13 @@ def evaluate_similarity(expected: str, actual: str) -> tuple[float, bool, str]:
         passed,
         f"Text similarity score: {score:.4f}. Passing threshold: 0.8.",
     )
+
+
+EVALUATORS = {
+    "exact_match": evaluate_exact_match,
+    "keyword_match": evaluate_keyword_match,
+    "similarity": evaluate_similarity,
+}
 
 
 def run_evaluation(
@@ -104,12 +119,13 @@ def run_evaluation(
             "Submit exactly one output for every test case in the dataset."
         )
 
+    evaluator = EVALUATORS[request.evaluator]
     results = []
 
     for test_case_id, test_case in dataset_cases.items():
         actual_output = submitted_outputs[test_case_id]
 
-        score, passed, details = evaluate_similarity(
+        score, passed, details = evaluator(
             test_case.expected_output,
             actual_output,
         )
@@ -121,13 +137,13 @@ def run_evaluation(
                 expected_output=test_case.expected_output,
                 score=score,
                 passed=passed,
-                evaluator="similarity",
+                evaluator=request.evaluator,
                 details=details,
             )
         )
 
     total_cases = len(results)
-    passed_cases = sum(1 for result in results if result.passed)
+    passed_cases = sum(result.passed for result in results)
     failed_cases = total_cases - passed_cases
     accuracy = round((passed_cases / total_cases) * 100, 2)
 

@@ -5,6 +5,7 @@ from backend.app.database import get_db
 from backend.app.schemas import (
     EvaluationRequest,
     EvaluationResultResponse,
+    EvaluationDetailResponse,
 )
 from backend.app.services import evaluation_service
 
@@ -55,6 +56,45 @@ async def list_evaluations(db: Session = Depends(get_db)):
         serialize_evaluation(evaluation)
         for evaluation in evaluations
     ]
+
+
+@router.get(
+    "/{evaluation_id}/results",
+    response_model=EvaluationDetailResponse,
+)
+async def retrieve_evaluation_results(
+    evaluation_id: int,
+    db: Session = Depends(get_db),
+):
+    result = evaluation_service.get_evaluation_run(
+        db,
+        evaluation_id,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evaluation run not found",
+        )
+
+    response = serialize_evaluation(result)
+
+    response["case_results"] = [
+        {
+            "id": case_result.id,
+            "test_case_id": case_result.test_case_id,
+            "test_case_name": case_result.test_case.name,
+            "actual_output": case_result.actual_output,
+            "expected_output": case_result.expected_output,
+            "score": case_result.score,
+            "passed": case_result.passed,
+            "evaluator": case_result.evaluator,
+            "details": case_result.details,
+        }
+        for case_result in result.case_results
+    ]
+
+    return response
 
 
 @router.get(

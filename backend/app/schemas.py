@@ -1,3 +1,4 @@
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -5,7 +6,6 @@ from pydantic import BaseModel, Field
 
 class TestCaseCreate(BaseModel):
     name: str = Field(min_length=3, max_length=120)
-
     description: str = Field(min_length=5, max_length=500)
 
     category: Literal[
@@ -16,7 +16,6 @@ class TestCaseCreate(BaseModel):
     ]
 
     expected_prompt: str = Field(min_length=1, max_length=5000)
-
     expected_output: str = Field(min_length=1, max_length=5000)
 
 
@@ -42,6 +41,11 @@ class EvaluationCaseInput(BaseModel):
 class EvaluationRequest(BaseModel):
     dataset_id: int
     outputs: list[EvaluationCaseInput] = Field(min_length=1)
+    evaluator: Literal[
+        "exact_match",
+        "keyword_match",
+        "similarity",
+    ] = "similarity"
 
 
 class EvaluationResultResponse(BaseModel):
@@ -52,3 +56,21 @@ class EvaluationResultResponse(BaseModel):
     failed_cases: int
     accuracy: float
     status: str
+
+
+class EvaluationCaseResultResponse(BaseModel):
+    id: int
+    test_case_id: int
+    test_case_name: str
+    actual_output: str
+    expected_output: str
+    score: float
+    passed: bool
+    evaluator: str
+    details: str | None
+
+
+class EvaluationDetailResponse(EvaluationResultResponse):
+    case_results: list[EvaluationCaseResultResponse] = Field(
+        default_factory=list
+    )
