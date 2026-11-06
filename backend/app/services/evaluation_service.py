@@ -177,3 +177,84 @@ def get_all_evaluation_runs(db: Session) -> list[EvaluationRun]:
     return db.query(EvaluationRun).order_by(
         EvaluationRun.id.desc()
     ).all()
+
+
+def run_agent_evaluation(
+    db: Session,
+    dataset_id: int,
+    agent_name: str,
+    evaluator_name: str = "similarity",
+) -> EvaluationRun:
+    from backend.app.services.agent_service import agent_service
+
+    dataset = db.query(Dataset).filter(
+        Dataset.id == dataset_id
+    ).first()
+
+    if dataset is None:
+        raise ValueError("Dataset not found.")
+
+    if not dataset.test_cases:
+        raise ValueError("Dataset contains no test cases.")
+
+    agent = agent_service.get_agent(agent_name)
+
+    if agent is None:
+        raise ValueError(f"Agent '{agent_name}' not found.")
+
+    evaluator = EVALUATORS.get(evaluator_name)
+
+    if evaluator is None:
+        raise ValueError("Invalid evaluation strategy.")
+
+    results = []
+
+    for test_case in dataset.test_cases:
+        execution = agent_service.execute_agent(
+            db=db,
+            agent_name=agent_name,
+            prompt=test_case.expected_prompt,
+        )
+
+        actual_output = execution["output"]
+
+        score, passed, details = evaluator(
+            test_case.expected_output,
+            actual_output,
+        )
+
+        results.append(
+            EvaluationCaseResult(
+                test_case_id=test_case.id,
+                actual_output=actual_output,
+                expected_output=test_case.expected_output,
+                score=score,
+                passed=passed,
+                evaluator=evaluator_name,
+                details=details,
+            )
+        )
+
+    total_cases = len(results)
+    passed_cases = sum(result.passed for result in results)
+    failed_cases = total_cases - passed_cases
+    accuracy = round(
+        (passed_cases / total_cases) * 100,
+        2,
+    )
+
+    evaluation_run = EvaluationRun(
+        dataset_id=dataset.id,
+        total_cases=total_cases,
+        passed_cases=passed_cases,
+        failed_cases=failed_cases,
+        accuracy=accuracy,
+        status="completed",
+        case_results=results,
+    )
+
+    db.add(evaluation_run)
+    db.commit()
+    db.refresh(evaluation_run)
+
+    return evaluation_run

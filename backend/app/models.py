@@ -1,3 +1,6 @@
+
+from datetime import datetime
+
 from sqlalchemy import (
     Column,
     ForeignKey,
@@ -7,6 +10,7 @@ from sqlalchemy import (
     Table,
     Float,
     Boolean,
+    DateTime,
 )
 from sqlalchemy.orm import relationship
 
@@ -105,3 +109,27 @@ class EvaluationCaseResult(Base):
     )
 
     test_case = relationship("TestCase")
+
+
+class AgentExecution(Base):
+    __tablename__ = "agent_executions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    agent_name = Column(String(120), nullable=False)
+    prompt = Column(Text, nullable=False)
+    output = Column(Text, nullable=True)
+
+    provider = Column(String(80), nullable=True)
+    model = Column(String(120), nullable=True)
+
+    status = Column(String(30), nullable=False)
+    error = Column(Text, nullable=True)
+
+    duration_ms = Column(Float, nullable=False, default=0.0)
+    trace = Column(Text, nullable=False)
+
+    executed_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )

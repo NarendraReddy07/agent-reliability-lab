@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 
+from backend.app.api.agents import router as agents_router
+
 from backend.app.database import Base, engine
 from backend.app.api.test_cases import router as test_cases_router
 from backend.app.api.datasets import router as datasets_router
@@ -16,6 +18,7 @@ app = FastAPI(
 app.include_router(test_cases_router)
 app.include_router(datasets_router)
 app.include_router(evaluations_router)
+app.include_router(agents_router)
 
 
 @app.get("/")

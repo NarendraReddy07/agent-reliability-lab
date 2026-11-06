@@ -48,6 +48,16 @@ class EvaluationRequest(BaseModel):
     ] = "similarity"
 
 
+class AgentEvaluationRequest(BaseModel):
+    dataset_id: int
+    agent_name: str = Field(min_length=1, max_length=120)
+    evaluator: Literal[
+        "exact_match",
+        "keyword_match",
+        "similarity",
+    ] = "similarity"
+
+
 class EvaluationResultResponse(BaseModel):
     id: int
     dataset_id: int
