@@ -1,3 +1,4 @@
+
 from sqlalchemy.orm import Session
 
 from backend.app.models import Dataset, TestCase
@@ -44,6 +45,31 @@ def add_test_case_to_dataset(
 
     if test_case not in dataset.test_cases:
         dataset.test_cases.append(test_case)
+
+    db.commit()
+    db.refresh(dataset)
+
+    return dataset
+
+
+def remove_test_case_from_dataset(
+    db: Session,
+    dataset_id: int,
+    test_case_id: int,
+) -> Dataset | None:
+    dataset = get_dataset(db, dataset_id)
+
+    if dataset is None:
+        return None
+
+    test_case = db.query(TestCase).filter(
+        TestCase.id == test_case_id
+    ).first()
+
+    if test_case is None or test_case not in dataset.test_cases:
+        return None
+
+    dataset.test_cases.remove(test_case)
 
     db.commit()
     db.refresh(dataset)

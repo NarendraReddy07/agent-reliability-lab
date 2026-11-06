@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   Routes,
@@ -10,6 +9,10 @@ import { Home, ArrowLeft } from "lucide-react";
 import AppLayout from "./components/AppLayout";
 import Overview from "./pages/Overview";
 import ResourcePage from "./pages/ResourcePage";
+import TraceExplorer from "./pages/TraceExplorer";
+import Datasets from "./pages/Datasets";
+import Evaluations from "./pages/Evaluations";
+import Analytics from "./pages/Analytics";
 
 function NotFound() {
   return (
@@ -68,29 +71,11 @@ export default function App() {
           }
         />
 
-        <Route
-          path="datasets"
-          element={
-            <ResourcePage
-              title="Datasets"
-              description="Inspect the datasets available for evaluation."
-              endpoint="/datasets/"
-              queryKey="datasets"
-            />
-          }
-        />
+        <Route path="datasets" element={<Datasets />} />
 
-        <Route
-          path="evaluations"
-          element={
-            <ResourcePage
-              title="Evaluations"
-              description="Review evaluation runs and their recorded results."
-              endpoint="/evaluations/"
-              queryKey="evaluations"
-            />
-          }
-        />
+        <Route path="evaluations" element={<Evaluations />} />
+
+        <Route path="analytics" element={<Analytics />} />
 
         <Route
           path="executions"
@@ -104,17 +89,7 @@ export default function App() {
           }
         />
 
-        <Route
-          path="traces"
-          element={
-            <ResourcePage
-              title="Trace explorer"
-              description="Browse executions that have detailed trace records."
-              endpoint="/agents/executions"
-              queryKey="trace-executions"
-            />
-          }
-        />
+        <Route path="traces" element={<TraceExplorer />} />
 
         <Route path="*" element={<NotFound />} />
       </Route>

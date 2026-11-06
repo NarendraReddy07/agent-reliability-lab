@@ -73,3 +73,25 @@ async def add_test_case(
         )
 
     return serialize_dataset(result)
+
+
+
+@router.delete("/{dataset_id}/test-cases/{test_case_id}")
+async def remove_test_case(
+    dataset_id: int,
+    test_case_id: int,
+    db: Session = Depends(get_db),
+):
+    result = dataset_service.remove_test_case_from_dataset(
+        db,
+        dataset_id,
+        test_case_id,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dataset, test case, or dataset association not found",
+        )
+
+    return serialize_dataset(result)

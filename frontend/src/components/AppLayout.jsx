@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
@@ -16,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Command,
+  ChartNoAxesCombined,
 } from "lucide-react";
 
 const navigation = [
@@ -23,6 +23,7 @@ const navigation = [
   { label: "Agents", path: "/agents", icon: Bot },
   { label: "Datasets", path: "/datasets", icon: Database },
   { label: "Evaluations", path: "/evaluations", icon: FlaskConical },
+  { label: "Analytics", path: "/analytics", icon: ChartNoAxesCombined },
   { label: "Executions", path: "/executions", icon: Activity },
   { label: "Traces", path: "/traces", icon: Workflow },
 ];
@@ -127,7 +128,11 @@ export default function AppLayout({ theme, setTheme }) {
           </div>
 
           <div className="topbar-actions">
-            <button className="command-trigger" disabled title="Command menu is being built">
+            <button
+              className="command-trigger"
+              disabled
+              title="Command menu is being built"
+            >
               <Command size={15} />
               <span>Search</span>
               <kbd>Ctrl K</kbd>
