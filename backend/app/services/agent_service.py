@@ -1,7 +1,6 @@
-
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -29,6 +28,29 @@ class AgentService:
     def get_agent(self, agent_name: str):
         return self.agents.get(agent_name)
 
+    @staticmethod
+    def _create_trace_event(
+        event: str,
+        start_time: float,
+        start_datetime: datetime,
+        **details,
+    ):
+        elapsed_ms = max(
+            0.0,
+            (time.perf_counter() - start_time) * 1000,
+        )
+
+        event_timestamp = start_datetime + timedelta(
+            microseconds=round(elapsed_ms * 1000)
+        )
+
+        return {
+            "event": event,
+            "timestamp": event_timestamp.isoformat(),
+            "elapsed_ms": round(elapsed_ms, 3),
+            **details,
+        }
+
     def execute_agent(
         self,
         db: Session,
@@ -41,31 +63,46 @@ class AgentService:
             raise ValueError(f"Agent '{agent_name}' not found.")
 
         start_time = time.perf_counter()
+        start_datetime = datetime.now(timezone.utc)
 
         trace_events = [
             {
                 "event": "execution_started",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": start_datetime.isoformat(),
+                "elapsed_ms": 0.0,
             }
         ]
 
         try:
+            agent_start = time.perf_counter()
             result = agent.execute(prompt)
 
-            trace_events.append({
-                "event": "agent_response",
-                "timestamp": datetime.utcnow().isoformat(),
-            })
+            agent_duration = (
+                time.perf_counter() - agent_start
+            ) * 1000
+
+            trace_events.append(
+                self._create_trace_event(
+                    "agent_response",
+                    start_time,
+                    start_datetime,
+                    duration_ms=round(agent_duration, 3),
+                )
+            )
 
             duration_ms = round(
                 (time.perf_counter() - start_time) * 1000,
-                2,
+                3,
             )
 
-            trace_events.append({
-                "event": "execution_completed",
-                "timestamp": datetime.utcnow().isoformat(),
-            })
+            trace_events.append(
+                self._create_trace_event(
+                    "execution_completed",
+                    start_time,
+                    start_datetime,
+                    duration_ms=duration_ms,
+                )
+            )
 
             execution = AgentExecution(
                 agent_name=agent.name,
@@ -97,14 +134,18 @@ class AgentService:
 
             duration_ms = round(
                 (time.perf_counter() - start_time) * 1000,
-                2,
+                3,
             )
 
-            trace_events.append({
-                "event": "execution_failed",
-                "timestamp": datetime.utcnow().isoformat(),
-                "error": str(error),
-            })
+            trace_events.append(
+                self._create_trace_event(
+                    "execution_failed",
+                    start_time,
+                    start_datetime,
+                    duration_ms=duration_ms,
+                    error=str(error),
+                )
+            )
 
             failed_execution = AgentExecution(
                 agent_name=agent.name,
