@@ -12,25 +12,16 @@ def normalize_text(value: str) -> str:
     return " ".join(value.strip().lower().split())
 
 
-def evaluate_exact_match(
-    expected: str,
-    actual: str,
-) -> tuple[float, bool, str]:
+def evaluate_exact_match(expected: str, actual: str) -> tuple[float, bool, str]:
     passed = normalize_text(expected) == normalize_text(actual)
-
     return (
         1.0 if passed else 0.0,
         passed,
-        "Outputs match exactly after normalization."
-        if passed
-        else "Outputs do not match.",
+        "Outputs match exactly after normalization." if passed else "Outputs do not match.",
     )
 
 
-def evaluate_keyword_match(
-    expected: str,
-    actual: str,
-) -> tuple[float, bool, str]:
+def evaluate_keyword_match(expected: str, actual: str) -> tuple[float, bool, str]:
     import re
 
     keywords = {
@@ -38,7 +29,6 @@ def evaluate_keyword_match(
         for word in re.findall(r"\b\w+\b", expected)
         if len(word) > 2
     }
-
     actual_words = {
         word.lower()
         for word in re.findall(r"\b\w+\b", actual)
@@ -58,10 +48,7 @@ def evaluate_keyword_match(
     )
 
 
-def evaluate_similarity(
-    expected: str,
-    actual: str,
-) -> tuple[float, bool, str]:
+def evaluate_similarity(expected: str, actual: str) -> tuple[float, bool, str]:
     from difflib import SequenceMatcher
 
     score = SequenceMatcher(
@@ -69,7 +56,6 @@ def evaluate_similarity(
         normalize_text(expected),
         normalize_text(actual),
     ).ratio()
-
     passed = score >= 0.8
 
     return (
@@ -86,49 +72,29 @@ EVALUATORS = {
 }
 
 
-def run_evaluation(
-    db: Session,
-    request: EvaluationRequest,
-) -> EvaluationRun:
-    dataset = db.query(Dataset).filter(
-        Dataset.id == request.dataset_id
-    ).first()
-
+def run_evaluation(db: Session, request: EvaluationRequest) -> EvaluationRun:
+    dataset = db.query(Dataset).filter(Dataset.id == request.dataset_id).first()
     if dataset is None:
         raise ValueError("Dataset not found.")
 
-    dataset_cases = {
-        test_case.id: test_case
-        for test_case in dataset.test_cases
-    }
-
+    dataset_cases = {case.id: case for case in dataset.test_cases}
     if not dataset_cases:
         raise ValueError("Dataset contains no test cases.")
 
     submitted_outputs = {
-        output.test_case_id: output.actual_output
-        for output in request.outputs
+        output.test_case_id: output.actual_output for output in request.outputs
     }
-
     if len(submitted_outputs) != len(request.outputs):
         raise ValueError("Duplicate test_case_id values were submitted.")
-
     if set(submitted_outputs) != set(dataset_cases):
-        raise ValueError(
-            "Submit exactly one output for every test case in the dataset."
-        )
+        raise ValueError("Submit exactly one output for every test case in the dataset.")
 
     evaluator = EVALUATORS[request.evaluator]
     results = []
 
     for test_case_id, test_case in dataset_cases.items():
         actual_output = submitted_outputs[test_case_id]
-
-        score, passed, details = evaluator(
-            test_case.expected_output,
-            actual_output,
-        )
-
+        score, passed, details = evaluator(test_case.expected_output, actual_output)
         results.append(
             EvaluationCaseResult(
                 test_case_id=test_case.id,
@@ -143,15 +109,13 @@ def run_evaluation(
 
     total_cases = len(results)
     passed_cases = sum(result.passed for result in results)
-    failed_cases = total_cases - passed_cases
-    accuracy = round((passed_cases / total_cases) * 100, 2)
-
     evaluation_run = EvaluationRun(
         dataset_id=dataset.id,
+        agent_name=None,
         total_cases=total_cases,
         passed_cases=passed_cases,
-        failed_cases=failed_cases,
-        accuracy=accuracy,
+        failed_cases=total_cases - passed_cases,
+        accuracy=round((passed_cases / total_cases) * 100, 2),
         status="completed",
         case_results=results,
     )
@@ -159,23 +123,15 @@ def run_evaluation(
     db.add(evaluation_run)
     db.commit()
     db.refresh(evaluation_run)
-
     return evaluation_run
 
 
-def get_evaluation_run(
-    db: Session,
-    evaluation_id: int,
-) -> EvaluationRun | None:
-    return db.query(EvaluationRun).filter(
-        EvaluationRun.id == evaluation_id
-    ).first()
+def get_evaluation_run(db: Session, evaluation_id: int) -> EvaluationRun | None:
+    return db.query(EvaluationRun).filter(EvaluationRun.id == evaluation_id).first()
 
 
 def get_all_evaluation_runs(db: Session) -> list[EvaluationRun]:
-    return db.query(EvaluationRun).order_by(
-        EvaluationRun.id.desc()
-    ).all()
+    return db.query(EvaluationRun).order_by(EvaluationRun.id.desc()).all()
 
 
 def run_agent_evaluation(
@@ -186,23 +142,17 @@ def run_agent_evaluation(
 ) -> EvaluationRun:
     from backend.app.services.agent_service import agent_service
 
-    dataset = db.query(Dataset).filter(
-        Dataset.id == dataset_id
-    ).first()
-
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if dataset is None:
         raise ValueError("Dataset not found.")
-
     if not dataset.test_cases:
         raise ValueError("Dataset contains no test cases.")
 
     agent = agent_service.get_agent(agent_name)
-
     if agent is None:
         raise ValueError(f"Agent '{agent_name}' not found.")
 
     evaluator = EVALUATORS.get(evaluator_name)
-
     if evaluator is None:
         raise ValueError("Invalid evaluation strategy.")
 
@@ -216,15 +166,12 @@ def run_agent_evaluation(
         )
 
         actual_output = execution["output"]
-
-        score, passed, details = evaluator(
-            test_case.expected_output,
-            actual_output,
-        )
+        score, passed, details = evaluator(test_case.expected_output, actual_output)
 
         results.append(
             EvaluationCaseResult(
                 test_case_id=test_case.id,
+                execution_id=execution["execution_id"],
                 actual_output=actual_output,
                 expected_output=test_case.expected_output,
                 score=score,
@@ -236,18 +183,13 @@ def run_agent_evaluation(
 
     total_cases = len(results)
     passed_cases = sum(result.passed for result in results)
-    failed_cases = total_cases - passed_cases
-    accuracy = round(
-        (passed_cases / total_cases) * 100,
-        2,
-    )
-
     evaluation_run = EvaluationRun(
         dataset_id=dataset.id,
+        agent_name=agent_name,
         total_cases=total_cases,
         passed_cases=passed_cases,
-        failed_cases=failed_cases,
-        accuracy=accuracy,
+        failed_cases=total_cases - passed_cases,
+        accuracy=round((passed_cases / total_cases) * 100, 2),
         status="completed",
         case_results=results,
     )
@@ -255,5 +197,4 @@ def run_agent_evaluation(
     db.add(evaluation_run)
     db.commit()
     db.refresh(evaluation_run)
-
     return evaluation_run

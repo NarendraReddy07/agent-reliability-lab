@@ -1,0 +1,103 @@
+/* Advanced reliability analytics */
+.analytics-advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+.analytics-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.analytics-category-row,
+.analytics-reliability-values {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.analytics-category-row > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.analytics-category-row strong {
+  color: var(--text-primary);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+.analytics-category-row span,
+.analytics-category-row b {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.analytics-category-row b {
+  color: var(--accent);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.analytics-chart-note {
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+.analytics-reliability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.analytics-reliability-card {
+  min-width: 0;
+  padding: 14px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+.analytics-reliability-card > strong {
+  display: block;
+  margin-bottom: 13px;
+  color: var(--text-primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.analytics-reliability-values span {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.analytics-reliability-values b {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.analytics-reliability-track {
+  height: 5px;
+  margin: 9px 0 12px;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: 99px;
+}
+.analytics-reliability-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+.analytics-reliability-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+@media (max-width: 900px) {
+  .analytics-advanced-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .analytics-reliability-grid { grid-template-columns: 1fr; }
+  .analytics-category-row { align-items: flex-start; }
+}

@@ -6,14 +6,12 @@ from pydantic import BaseModel, Field
 class TestCaseCreate(BaseModel):
     name: str = Field(min_length=3, max_length=120)
     description: str = Field(min_length=5, max_length=500)
-
     category: Literal[
         "accuracy",
         "tool_usage",
         "safety",
         "instruction_following",
     ]
-
     expected_prompt: str = Field(min_length=1, max_length=5000)
     expected_output: str = Field(min_length=1, max_length=5000)
 
@@ -60,6 +58,7 @@ class AgentEvaluationRequest(BaseModel):
 class EvaluationResultResponse(BaseModel):
     id: int
     dataset_id: int
+    agent_name: str | None = None
     total_cases: int
     passed_cases: int
     failed_cases: int
@@ -71,6 +70,7 @@ class EvaluationCaseResultResponse(BaseModel):
     id: int
     test_case_id: int
     test_case_name: str
+    execution_id: int | None = None
     actual_output: str
     expected_output: str
     score: float
@@ -80,6 +80,4 @@ class EvaluationCaseResultResponse(BaseModel):
 
 
 class EvaluationDetailResponse(EvaluationResultResponse):
-    case_results: list[EvaluationCaseResultResponse] = Field(
-        default_factory=list
-    )
+    case_results: list[EvaluationCaseResultResponse] = Field(default_factory=list)

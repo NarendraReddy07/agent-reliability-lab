@@ -1,0 +1,112 @@
+/* Execution-to-evaluation linkage and cross-run agent reliability */
+.evaluation-execution-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.evaluation-execution-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.evaluation-execution-link:hover { filter: brightness(1.08); }
+.evaluation-no-execution {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.evaluation-agent-reliability { min-width: 0; }
+.evaluation-reliability-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.evaluation-reliability-heading h2 {
+  margin: 5px 0;
+  font-size: 15px;
+}
+.evaluation-reliability-heading p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.evaluation-reliability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.evaluation-reliability-card {
+  min-width: 0;
+  padding: 14px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+.evaluation-reliability-card > strong {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.evaluation-reliability-primary,
+.evaluation-reliability-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.evaluation-reliability-primary span,
+.evaluation-reliability-stats,
+.evaluation-reliability-card > small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.evaluation-reliability-primary b {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.evaluation-reliability-track {
+  height: 5px;
+  margin: 10px 0;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: 99px;
+}
+.evaluation-reliability-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+.evaluation-reliability-stats {
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+.evaluation-reliability-card > small { display: block; }
+.evaluation-history-agent {
+  color: var(--accent);
+  font-size: 9px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .evaluation-reliability-grid { grid-template-columns: 1fr; }
+  .evaluation-execution-link-row { justify-content: stretch; }
+  .evaluation-execution-link { justify-content: center; width: 100%; }
+}

@@ -59,6 +59,7 @@ class EvaluationRun(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
+    agent_name = Column(String(120), nullable=True)
 
     total_cases = Column(Integer, nullable=False)
     passed_cases = Column(Integer, nullable=False)
@@ -95,6 +96,13 @@ class EvaluationCaseResult(Base):
         nullable=False,
     )
 
+    execution_id = Column(
+        Integer,
+        ForeignKey("agent_executions.id"),
+        nullable=True,
+        index=True,
+    )
+
     actual_output = Column(Text, nullable=False)
     expected_output = Column(Text, nullable=False)
     score = Column(Float, nullable=False)
@@ -108,6 +116,7 @@ class EvaluationCaseResult(Base):
     )
 
     test_case = relationship("TestCase")
+    execution = relationship("AgentExecution")
 
 
 class AgentExecution(Base):
