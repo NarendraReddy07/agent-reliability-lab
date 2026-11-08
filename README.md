@@ -250,4 +250,4 @@ The current implementation focuses on the evaluation and observability foundatio
 
 ## License
 
-No license has been specified yet. All rights are reserved unless and until a license is added to this repository.
+MIT License
