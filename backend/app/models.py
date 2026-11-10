@@ -25,6 +25,10 @@ dataset_test_cases = Table(
 
 
 class TestCase(Base):
+    # Prevent pytest from treating this SQLAlchemy model as a test class
+    # when test modules import it directly.
+    __test__ = False
+
     __tablename__ = "test_cases"
 
     id = Column(Integer, primary_key=True, index=True)

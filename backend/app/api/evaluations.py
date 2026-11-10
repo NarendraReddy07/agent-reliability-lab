@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -8,8 +8,12 @@ from backend.app.schemas import (
     EvaluationResultResponse,
     EvaluationDetailResponse,
 )
-from backend.app.services import evaluation_service
-from backend.app.services import metrics_service
+from backend.app.services import (
+    evaluation_service,
+    metrics_service,
+    regression_service,
+    quality_gate_service,
+)
 
 
 router = APIRouter(prefix="/api/evaluations", tags=["Evaluations"])
@@ -96,11 +100,54 @@ async def recent_evaluations(limit: int = 10, db: Session = Depends(get_db)):
     return metrics_service.get_recent_evaluations(db=db, limit=limit)
 
 
+@router.get("/{evaluation_id}/comparison")
+async def compare_evaluation(evaluation_id: int, db: Session = Depends(get_db)):
+    try:
+        return regression_service.compare_evaluation_runs(db, evaluation_id)
+    except ValueError as error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if str(error) == "Evaluation run not found."
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=str(error))
+
+
+@router.get("/{evaluation_id}/quality-gate")
+async def evaluation_quality_gate(
+    evaluation_id: int,
+    minimum_accuracy: float = Query(default=95.0, ge=0.0, le=100.0),
+    max_regressions: int = Query(default=0, ge=0, le=1000),
+    max_score_degradations: int = Query(default=0, ge=0, le=1000),
+    require_baseline: bool = True,
+    db: Session = Depends(get_db),
+):
+    try:
+        return quality_gate_service.evaluate_quality_gate(
+            db=db,
+            evaluation_id=evaluation_id,
+            minimum_accuracy=minimum_accuracy,
+            max_regressions=max_regressions,
+            max_score_degradations=max_score_degradations,
+            require_baseline=require_baseline,
+        )
+    except ValueError as error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if str(error) == "Evaluation run not found."
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=str(error))
+
+
 @router.get("/{evaluation_id}/results", response_model=EvaluationDetailResponse)
 async def retrieve_evaluation_results(evaluation_id: int, db: Session = Depends(get_db)):
     result = evaluation_service.get_evaluation_run(db, evaluation_id)
     if result is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evaluation run not found",
+        )
 
     response = serialize_evaluation(result)
     response["case_results"] = [
@@ -125,5 +172,8 @@ async def retrieve_evaluation_results(evaluation_id: int, db: Session = Depends(
 async def retrieve_evaluation(evaluation_id: int, db: Session = Depends(get_db)):
     result = evaluation_service.get_evaluation_run(db, evaluation_id)
     if result is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evaluation run not found",
+        )
     return serialize_evaluation(result)

@@ -14,6 +14,9 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  TrendingDown,
+  TrendingUp,
+  Minus,
   XCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -33,12 +36,6 @@ function getRows(data, keys = []) {
 function getAgentName(agent) {
   if (typeof agent === "string") return agent;
   return agent?.name || agent?.agent_name || agent?.id || "";
-}
-
-function formatDate(value) {
-  if (!value) return "Date unavailable";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
 }
 
 function StatusBadge({ passed }) {
@@ -119,6 +116,169 @@ function CaseResult({ result, index }) {
   );
 }
 
+function ComparisonCaseList({ title, items, tone, icon: Icon, emptyText }) {
+  if (!items?.length) return null;
+  return (
+    <div className={`comparison-case-group ${tone}`}>
+      <div className="comparison-case-group-heading">
+        <Icon size={15} />
+        <strong>{title}</strong>
+        <span>{items.length}</span>
+      </div>
+      <div className="comparison-case-items">
+        {items.map((item) => (
+          <div className="comparison-case-item" key={item.test_case_id}>
+            <span>{item.test_case_name || `Test case #${item.test_case_id}`}</span>
+            <small>
+              {item.previous_passed === null || item.previous_passed === undefined
+                ? "New in this run"
+                : `${item.previous_passed ? "Passed" : "Failed"} → ${item.current_passed ? "Passed" : "Failed"}`}
+            </small>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RegressionComparison({ query }) {
+  if (query.isLoading) {
+    return <section className="panel regression-panel"><div className="regression-loading"><RefreshCw size={17} className="spin" /> Comparing with previous run...</div></section>;
+  }
+  if (query.error) {
+    return <section className="panel regression-panel"><div className="regression-message error"><AlertCircle size={17} /><span>Comparison unavailable: {getApiError(query.error)}</span></div></section>;
+  }
+
+  const data = query.data;
+  if (!data?.comparison_available) {
+    return (
+      <section className="panel regression-panel">
+        <div className="regression-heading">
+          <div><div className="eyebrow">REGRESSION CHECK</div><h3>Run comparison</h3></div>
+          <span className="comparison-status neutral">Baseline unavailable</span>
+        </div>
+        <p className="regression-description">{data?.reason || "There is no comparable previous run yet."}</p>
+      </section>
+    );
+  }
+
+  const delta = Number(data.accuracy_delta || 0);
+  const deltaLabel = `${delta > 0 ? "+" : ""}${delta.toFixed(1)} pp`;
+  const hasRegressions = data.summary?.regressions > 0;
+
+  return (
+    <section className="panel regression-panel">
+      <div className="regression-heading">
+        <div><div className="eyebrow">REGRESSION CHECK</div><h3>Compared with run #{data.baseline_evaluation_id}</h3></div>
+        <span className={`comparison-status ${hasRegressions ? "regressed" : "healthy"}`}>
+          {hasRegressions ? <TrendingDown size={14} /> : <CheckCircle2 size={14} />}
+          {hasRegressions ? "Regression detected" : "No regressions"}
+        </span>
+      </div>
+      <div className="regression-summary-grid">
+        <div className="regression-summary-card">
+          <span>Accuracy change</span>
+          <strong className={delta > 0 ? "positive" : delta < 0 ? "negative" : ""}>{deltaLabel}</strong>
+          <small>{data.baseline_accuracy}% baseline → {data.current_accuracy}% current</small>
+        </div>
+        <div className="regression-summary-card">
+          <span>Regressions</span><strong className={data.summary.regressions ? "negative" : "positive"}>{data.summary.regressions}</strong>
+          <small>Previously passed, now failed</small>
+        </div>
+        <div className="regression-summary-card">
+          <span>Improvements</span><strong className="positive">{data.summary.improvements}</strong>
+          <small>Previously failed, now passed</small>
+        </div>
+        <div className="regression-summary-card">
+          <span>Unchanged</span><strong>{data.summary.unchanged}</strong>
+          <small>Same pass/fail result</small>
+        </div>
+      </div>
+      <div className="regression-case-groups">
+        <ComparisonCaseList title="Regressions" items={data.regressions} tone="negative" icon={TrendingDown} />
+        <ComparisonCaseList title="Improvements" items={data.improvements} tone="positive" icon={TrendingUp} />
+        <ComparisonCaseList title="New cases" items={data.new_cases} tone="neutral" icon={Play} />
+        <ComparisonCaseList title="Removed cases" items={data.removed_cases} tone="neutral" icon={Minus} />
+      </div>
+      {!hasRegressions && data.summary.improvements === 0 && (
+        <div className="regression-message healthy"><CheckCircle2 size={16} />All comparable test cases retained their previous pass/fail result.</div>
+      )}
+    </section>
+  );
+}
+
+
+function QualityGate({ query }) {
+  if (query.isLoading) {
+    return (
+      <section className="panel quality-gate-panel">
+        <div className="regression-loading"><RefreshCw size={17} className="spin" /> Evaluating release quality gate...</div>
+      </section>
+    );
+  }
+
+  if (query.error) {
+    return (
+      <section className="panel quality-gate-panel">
+        <div className="regression-message error"><AlertCircle size={17} /><span>Quality gate unavailable: {getApiError(query.error)}</span></div>
+      </section>
+    );
+  }
+
+  const data = query.data;
+  const passed = data?.passed === true;
+  const checks = Object.entries(data?.checks || {});
+
+  return (
+    <section className="panel quality-gate-panel">
+      <div className="regression-heading">
+        <div>
+          <div className="eyebrow">RELEASE READINESS</div>
+          <h3>Benchmark quality gate</h3>
+          <p className="regression-description">
+            Evaluation #{data.evaluation_id} · Baseline {data.baseline_evaluation_id ? `#${data.baseline_evaluation_id}` : "not available"}
+          </p>
+        </div>
+        <span className={`comparison-status ${passed ? "healthy" : "regressed"}`}>
+          {passed ? <CheckCircle2 size={14} /> : <ShieldAlert size={14} />}
+          {passed ? "Eligible for promotion" : "Promotion blocked"}
+        </span>
+      </div>
+
+      <div className="quality-gate-config">
+        <span>Minimum accuracy <strong>{data.configuration.minimum_accuracy}%</strong></span>
+        <span>Max regressions <strong>{data.configuration.max_regressions}</strong></span>
+        <span>Max score drops <strong>{data.configuration.max_score_degradations}</strong></span>
+        <span>Baseline required <strong>{data.configuration.require_baseline ? "Yes" : "No"}</strong></span>
+      </div>
+
+      <div className="quality-gate-checks">
+        {checks.map(([key, check]) => (
+          <div className="quality-gate-check" key={key}>
+            <span className={check.passed ? "quality-gate-check-icon passed" : "quality-gate-check-icon failed"}>
+              {check.passed ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+            </span>
+            <div>
+              <strong>{key.replaceAll("_", " ")}</strong>
+              <p>{check.message}</p>
+            </div>
+            <span className={`quality-gate-result ${check.passed ? "passed" : "failed"}`}>
+              {check.passed ? "Pass" : "Fail"}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {data.failed_checks?.length > 0 && (
+        <div className="quality-gate-failures">
+          <strong>Failed checks</strong>
+          <span>{data.failed_checks.map((item) => item.replaceAll("_", " ")).join(", ")}</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function Evaluations() {
   const queryClient = useQueryClient();
   const [datasetId, setDatasetId] = useState("");
@@ -154,6 +314,18 @@ export default function Evaluations() {
     enabled: selectedEvaluationId !== null,
   });
 
+  const comparisonQuery = useQuery({
+    queryKey: ["evaluation-comparison", selectedEvaluationId],
+    queryFn: async () => (await api.get(`/evaluations/${selectedEvaluationId}/comparison`)).data,
+    enabled: selectedEvaluationId !== null && Boolean(selectedEvaluation?.agent_name),
+  });
+
+  const qualityGateQuery = useQuery({
+    queryKey: ["evaluation-quality-gate", selectedEvaluationId],
+    queryFn: async () => (await api.get(`/evaluations/${selectedEvaluationId}/quality-gate`)).data,
+    enabled: selectedEvaluationId !== null && Boolean(selectedEvaluation?.agent_name),
+  });
+
   const details = detailQuery.data;
   const caseResults = details?.case_results || [];
 
@@ -172,12 +344,7 @@ export default function Evaluations() {
     const grouped = new Map();
     history.filter((run) => run.agent_name).forEach((run) => {
       const current = grouped.get(run.agent_name) || {
-        name: run.agent_name,
-        runs: 0,
-        cases: 0,
-        passed: 0,
-        failed: 0,
-        accuracyTotal: 0,
+        name: run.agent_name, runs: 0, cases: 0, passed: 0, failed: 0, accuracyTotal: 0,
       };
       current.runs += 1;
       current.cases += Number(run.total_cases || 0);
@@ -194,9 +361,7 @@ export default function Evaluations() {
   }, [history]);
 
   useEffect(() => {
-    if (history.length > 0 && selectedEvaluationId === null) {
-      setSelectedEvaluationId(history[0].id);
-    }
+    if (history.length > 0 && selectedEvaluationId === null) setSelectedEvaluationId(history[0].id);
   }, [history, selectedEvaluationId]);
 
   useEffect(() => {
@@ -222,6 +387,7 @@ export default function Evaluations() {
       if (data?.id !== undefined && data?.id !== null) {
         setSelectedEvaluationId(data.id);
         queryClient.invalidateQueries({ queryKey: ["evaluation-results", data.id] });
+        queryClient.invalidateQueries({ queryKey: ["evaluation-comparison", data.id] });
       }
     },
     onError: (error) => toast.error(getApiError(error)),
@@ -233,20 +399,11 @@ export default function Evaluations() {
       toast.error("Select an agent, dataset and evaluation strategy.");
       return;
     }
-    runMutation.mutate({
-      dataset_id: Number(datasetId),
-      agent_name: agentName,
-      evaluator,
-    });
+    runMutation.mutate({ dataset_id: Number(datasetId), agent_name: agentName, evaluator });
   };
 
   const refreshAll = async () => {
-    await Promise.all([
-      agentsQuery.refetch(),
-      datasetsQuery.refetch(),
-      historyQuery.refetch(),
-      detailQuery.refetch(),
-    ]);
+    await Promise.all([agentsQuery.refetch(), datasetsQuery.refetch(), historyQuery.refetch(), detailQuery.refetch(), comparisonQuery.refetch()]);
   };
 
   const summary = details || selectedEvaluation || {};
@@ -325,9 +482,7 @@ export default function Evaluations() {
             {agentReliability.map((agent) => (
               <article className="evaluation-reliability-card" key={agent.name}>
                 <strong>{agent.name}</strong>
-                <div className="evaluation-reliability-primary">
-                  <span>Average run accuracy</span><b>{agent.averageAccuracy.toFixed(1)}%</b>
-                </div>
+                <div className="evaluation-reliability-primary"><span>Average run accuracy</span><b>{agent.averageAccuracy.toFixed(1)}%</b></div>
                 <div className="evaluation-reliability-track"><span style={{ width: `${Math.max(0, Math.min(100, agent.averageAccuracy))}%` }} /></div>
                 <div className="evaluation-reliability-stats">
                   <span>{agent.runs} runs</span><span>{agent.cases} cases</span><span>{agent.passed} passed</span><span>{agent.failed} failed</span>
@@ -365,7 +520,7 @@ export default function Evaluations() {
 
         <div className="evaluation-detail">
           {selectedEvaluationId === null ? (
-            <section className="panel evaluation-placeholder"><Activity size={30} /><h2>Select an evaluation</h2><p>Choose a run from the history to inspect its benchmark results.</p></section>
+            <section className="panel evaluation-placeholder"><Activity size={30} /><h2>Select an evaluation</h2><p>Choose a run from the history to inspect its results.</p></section>
           ) : detailQuery.isLoading ? (
             <section className="panel evaluation-placeholder"><RefreshCw size={24} className="spin" /><p>Loading evaluation results...</p></section>
           ) : detailQuery.error ? (
@@ -373,7 +528,7 @@ export default function Evaluations() {
           ) : details ? (
             <>
               <section className="evaluation-result-heading">
-                <div><div className="eyebrow">BENCHMARK REPORT</div><h2>Evaluation #{details.id}</h2><p>{details.agent_name || "Manual evaluation"} · Dataset #{details.dataset_id} · {details.status || "Unknown status"}</p></div>
+                <div><div className="eyebrow">BENCHMARK REPORT</div><h2>Evaluation #{details.id}</h2><p>{details.agent_name || "Manual evaluation"} · Dataset #{details.dataset_id} · {details.status || "completed"}</p></div>
                 <span className="evaluation-completed"><CheckCircle2 size={14} />{details.status || "Completed"}</span>
               </section>
               <section className="evaluation-metrics-grid">
@@ -382,17 +537,17 @@ export default function Evaluations() {
                 <MetricCard label="Passed" value={passedCases} icon={CheckCircle2} tone="green" />
                 <MetricCard label="Failed" value={failedCases} icon={XCircle} tone="red" />
               </section>
+              {details.agent_name && <RegressionComparison query={comparisonQuery} />}
+              {details.agent_name && <QualityGate query={qualityGateQuery} />}
               <section className="panel evaluation-results-panel">
                 <div className="panel-heading evaluation-results-toolbar">
                   <div><h2>Test case results</h2><p>Inspect individual responses, execution records and evaluator feedback.</p></div>
                   <div className="evaluation-search"><Search size={15} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search test cases" /></div>
                 </div>
                 <div className="evaluation-filter-row">
-                  {[
-                    ["all", `All (${caseResults.length})`],
-                    ["passed", `Passed (${passedCases})`],
-                    ["failed", `Failed (${failedCases})`],
-                  ].map(([value, label]) => <button key={value} className={`evaluation-filter ${caseFilter === value ? "active" : ""}`} onClick={() => setCaseFilter(value)}>{label}</button>)}
+                  {[["all", `All (${caseResults.length})`], ["passed", `Passed (${passedCases})`], ["failed", `Failed (${failedCases})`]].map(([value, label]) => (
+                    <button key={value} className={`evaluation-filter ${caseFilter === value ? "active" : ""}`} onClick={() => setCaseFilter(value)}>{label}</button>
+                  ))}
                 </div>
                 {caseResults.length === 0 ? (
                   <div className="empty-state"><FileText size={25} /><strong>No case results</strong><span>This evaluation has no recorded test-case results.</span></div>

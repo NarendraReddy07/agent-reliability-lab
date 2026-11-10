@@ -1,12 +1,17 @@
-from fastapi import FastAPI
+import asyncio
+from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
 from sqlalchemy import inspect, text
 
 from backend.app.api.agents import router as agents_router
-from backend.app.database import Base, engine
-from backend.app.api.test_cases import router as test_cases_router
 from backend.app.api.datasets import router as datasets_router
 from backend.app.api.evaluations import router as evaluations_router
+from backend.app.api.schedules import router as schedules_router
+from backend.app.api.test_cases import router as test_cases_router
+from backend.app.database import Base, engine
+from backend.app import scheduled_models  # noqa: F401
+from backend.app.scheduler import benchmark_scheduler_loop
 
 Base.metadata.create_all(bind=engine)
 
@@ -41,16 +46,32 @@ def migrate_evaluation_linkage():
 
 migrate_evaluation_linkage()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler_task = asyncio.create_task(benchmark_scheduler_loop())
+    try:
+        yield
+    finally:
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
+
+
 app = FastAPI(
     title="Agent Reliability Lab",
     description="AI Agent Evaluation and Observability Platform",
-    version="0.4.0",
+    version="0.5.0",
+    lifespan=lifespan,
 )
 
 app.include_router(test_cases_router)
 app.include_router(datasets_router)
 app.include_router(evaluations_router)
 app.include_router(agents_router)
+app.include_router(schedules_router)
 
 
 @app.get("/")
@@ -58,7 +79,7 @@ async def root():
     return {
         "message": "Welcome to Agent Reliability Lab",
         "status": "running",
-        "version": "0.4.0",
+        "version": "0.5.0",
     }
 
 

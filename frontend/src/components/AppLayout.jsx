@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Command,
   ChartNoAxesCombined,
+  CalendarClock,
 } from "lucide-react";
 
 const navigation = [
@@ -26,6 +27,7 @@ const navigation = [
   { label: "Analytics", path: "/analytics", icon: ChartNoAxesCombined },
   { label: "Executions", path: "/executions", icon: Activity },
   { label: "Traces", path: "/traces", icon: Workflow },
+  { label: "Schedules", path: "/schedules", icon: CalendarClock },
 ];
 
 export default function AppLayout({ theme, setTheme }) {
