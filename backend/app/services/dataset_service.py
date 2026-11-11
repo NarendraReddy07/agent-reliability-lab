@@ -1,4 +1,3 @@
-
 from sqlalchemy.orm import Session
 
 from backend.app.models import Dataset, TestCase
@@ -75,3 +74,29 @@ def remove_test_case_from_dataset(
     db.refresh(dataset)
 
     return dataset
+
+
+def delete_dataset(db: Session, dataset_id: int) -> bool:
+    dataset = get_dataset(db, dataset_id)
+
+    if dataset is None:
+        return False
+
+    try:
+        # Remove only the dataset associations.
+        # Test cases remain available in the shared library.
+        dataset.test_cases.clear()
+
+        # Delete evaluation runs. Their configured ORM cascade
+        # removes their associated evaluation case results.
+        for evaluation_run in list(dataset.evaluation_runs):
+            db.delete(evaluation_run)
+
+        db.delete(dataset)
+        db.commit()
+
+        return True
+
+    except Exception:
+        db.rollback()
+        raise

@@ -4,3 +4,5 @@ pydantic
 pytest
 httpx
 sqlalchemy
+psycopg[binary]>=3.2,<4
+PyJWT>=2.10,<3

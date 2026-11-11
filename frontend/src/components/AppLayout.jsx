@@ -1,11 +1,16 @@
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+
 import {
   Activity,
   Bot,
   Database,
   FlaskConical,
-  History,
   LayoutDashboard,
   Menu,
   Moon,
@@ -17,26 +22,164 @@ import {
   Command,
   ChartNoAxesCombined,
   CalendarClock,
+  UserRound,
+  ChevronDown,
+  Settings,
+  ShieldCheck,
+  LogOut,
+  Search,
+  ArrowUp,
+  ArrowDown,
+  CornerDownLeft,
 } from "lucide-react";
 
+import { USERNAME_STORAGE_KEY } from "../lib/api";
+
 const navigation = [
-  { label: "Overview", path: "/", icon: LayoutDashboard },
-  { label: "Agents", path: "/agents", icon: Bot },
-  { label: "Datasets", path: "/datasets", icon: Database },
-  { label: "Evaluations", path: "/evaluations", icon: FlaskConical },
-  { label: "Analytics", path: "/analytics", icon: ChartNoAxesCombined },
-  { label: "Executions", path: "/executions", icon: Activity },
-  { label: "Traces", path: "/traces", icon: Workflow },
-  { label: "Schedules", path: "/schedules", icon: CalendarClock },
+  { label: "Overview", path: "/", icon: LayoutDashboard, keywords: "dashboard home metrics" },
+  { label: "Agents", path: "/agents", icon: Bot, keywords: "ai models execution" },
+  { label: "Datasets", path: "/datasets", icon: Database, keywords: "test cases data library" },
+  { label: "Evaluations", path: "/evaluations", icon: FlaskConical, keywords: "benchmark scoring accuracy" },
+  { label: "Analytics", path: "/analytics", icon: ChartNoAxesCombined, keywords: "charts reports performance" },
+  { label: "Executions", path: "/executions", icon: Activity, keywords: "history runs results" },
+  { label: "Traces", path: "/traces", icon: Workflow, keywords: "logs debugging workflow" },
+  { label: "Schedules", path: "/schedules", icon: CalendarClock, keywords: "scheduled recurring benchmarks" },
+  { label: "My Profile", path: "/profile", icon: UserRound, keywords: "account administrator identity" },
+  { label: "Account Settings", path: "/settings", icon: Settings, keywords: "preferences appearance theme" },
 ];
 
-export default function AppLayout({ theme, setTheme }) {
+function getUsername() {
+  return sessionStorage.getItem(USERNAME_STORAGE_KEY) || "Administrator";
+}
+
+export default function AppLayout({ theme, setTheme, onLogout }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const profileRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+  const username = getUsername();
 
   const toggleTheme = () => {
     setTheme((current) => current === "dark" ? "light" : "dark");
   };
+
+  const filteredNavigation = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return navigation;
+
+    return navigation.filter((item) =>
+      `${item.label} ${item.keywords}`.toLowerCase().includes(query)
+    );
+  }, [searchQuery]);
+
+  function openSearch() {
+    setProfileOpen(false);
+    setSearchQuery("");
+    setActiveIndex(0);
+    setSearchOpen(true);
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setActiveIndex(0);
+  }
+
+  function navigateTo(path) {
+    closeSearch();
+    setProfileOpen(false);
+    setMobileOpen(false);
+    navigate(path);
+  }
+
+  function handleSearchKeyDown(event) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((current) =>
+        Math.min(current + 1, filteredNavigation.length - 1)
+      );
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((current) => Math.max(current - 1, 0));
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const selected = filteredNavigation[activeIndex];
+      if (selected) navigateTo(selected.path);
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeSearch();
+    }
+  }
+
+  useEffect(() => {
+    setProfileOpen(false);
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setProfileOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setProfileOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleGlobalShortcut(event) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "k"
+      ) {
+        event.preventDefault();
+        setSearchOpen((current) => !current);
+        setSearchQuery("");
+        setActiveIndex(0);
+        setProfileOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleGlobalShortcut);
+    return () => document.removeEventListener("keydown", handleGlobalShortcut);
+  }, []);
+
+  useEffect(() => {
+    if (searchOpen) {
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+    }
+  }, [searchOpen]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [searchQuery]);
 
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -75,29 +218,27 @@ export default function AppLayout({ theme, setTheme }) {
         </div>
 
         <nav className="navigation">
-          {navigation.map(({ label, path, icon: Icon }) => (
-            <NavLink
-              key={path}
-              to={path}
-              end={path === "/"}
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) =>
-                `nav-link ${isActive ? "active" : ""}`
-              }
-              title={collapsed ? label : undefined}
-            >
-              <Icon size={19} />
-              {!collapsed && <span>{label}</span>}
-            </NavLink>
-          ))}
+          {navigation
+            .filter((item) => !["My Profile", "Account Settings"].includes(item.label))
+            .map(({ label, path, icon: Icon }) => (
+              <NavLink
+                key={path}
+                to={path}
+                end={path === "/"}
+                onClick={() => setMobileOpen(false)}
+                className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                title={collapsed ? label : undefined}
+              >
+                <Icon size={19} />
+                {!collapsed && <span>{label}</span>}
+              </NavLink>
+            ))}
         </nav>
 
         <div className="sidebar-bottom">
           <div className="sidebar-status">
             <span className="status-dot" />
-            {!collapsed && (
-              <span>Monitoring workspace</span>
-            )}
+            {!collapsed && <span>Monitoring workspace</span>}
           </div>
 
           <button
@@ -131,9 +272,11 @@ export default function AppLayout({ theme, setTheme }) {
 
           <div className="topbar-actions">
             <button
+              type="button"
               className="command-trigger"
-              disabled
-              title="Command menu is being built"
+              onClick={openSearch}
+              title="Search workspace (Ctrl + K)"
+              aria-label="Search workspace"
             >
               <Command size={15} />
               <span>Search</span>
@@ -149,8 +292,73 @@ export default function AppLayout({ theme, setTheme }) {
               {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
             </button>
 
-            <div className="avatar" title="Agent Reliability Lab">
-              AR
+            <div className="profile-menu-wrapper" ref={profileRef}>
+              <button
+                type="button"
+                className={`profile-trigger ${profileOpen ? "profile-trigger-active" : ""}`}
+                onClick={() => setProfileOpen((value) => !value)}
+                aria-expanded={profileOpen}
+                aria-haspopup="menu"
+                aria-label="Open user profile menu"
+              >
+                <span className="profile-avatar">
+                  {username.charAt(0).toUpperCase()}
+                </span>
+                <ChevronDown size={15} className="profile-chevron" />
+              </button>
+
+              {profileOpen && (
+                <div className="profile-dropdown" role="menu">
+                  <div className="profile-dropdown-header">
+                    <span className="profile-avatar profile-avatar-large">
+                      {username.charAt(0).toUpperCase()}
+                    </span>
+                    <div className="profile-dropdown-identity">
+                      <strong>{username}</strong>
+                      <span>Administrator</span>
+                    </div>
+                  </div>
+
+                  <div className="profile-dropdown-divider" />
+
+                  <button
+                    type="button"
+                    className="profile-dropdown-item"
+                    role="menuitem"
+                    onClick={() => navigateTo("/profile")}
+                  >
+                    <UserRound size={17} />
+                    <span>My Profile</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="profile-dropdown-item"
+                    role="menuitem"
+                    onClick={() => navigateTo("/settings")}
+                  >
+                    <Settings size={17} />
+                    <span>Account settings</span>
+                  </button>
+
+                  <div className="profile-dropdown-divider" />
+
+                  <div className="profile-security-note">
+                    <ShieldCheck size={15} />
+                    <span>Authenticated session</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="profile-dropdown-item profile-logout"
+                    role="menuitem"
+                    onClick={onLogout}
+                  >
+                    <LogOut size={17} />
+                    <span>Sign out</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -165,6 +373,96 @@ export default function AppLayout({ theme, setTheme }) {
           <span>© {new Date().getFullYear()}</span>
         </footer>
       </div>
+
+      {searchOpen && (
+        <div
+          className="command-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeSearch();
+          }}
+        >
+          <section
+            className="command-palette"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Search workspace"
+          >
+            <div className="command-search-input">
+              <Search size={20} />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search pages and workspace..."
+                aria-label="Search pages"
+                autoComplete="off"
+              />
+              <kbd>ESC</kbd>
+              <button
+                className="icon-button"
+                onClick={closeSearch}
+                aria-label="Close search"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="command-results">
+              <div className="command-section-label">NAVIGATION</div>
+
+              {filteredNavigation.length > 0 ? (
+                filteredNavigation.map((item, index) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <button
+                      key={item.path}
+                      type="button"
+                      className={`command-result ${activeIndex === index ? "active" : ""}`}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      onClick={() => navigateTo(item.path)}
+                    >
+                      <span className="command-result-icon">
+                        <Icon size={17} />
+                      </span>
+                      <span className="command-result-label">{item.label}</span>
+                      {activeIndex === index && (
+                        <span className="command-result-enter">
+                          <CornerDownLeft size={14} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="command-no-results">
+                  <Search size={22} />
+                  <strong>No matching pages</strong>
+                  <span>Try another search term.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="command-footer">
+              <span>
+                <kbd><ArrowUp size={11} /></kbd>
+                <kbd><ArrowDown size={11} /></kbd>
+                Navigate
+              </span>
+              <span>
+                <kbd><CornerDownLeft size={11} /></kbd>
+                Open page
+              </span>
+              <span>
+                <kbd>ESC</kbd>
+                Close
+              </span>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

@@ -54,6 +54,22 @@ async def retrieve_dataset(
     return serialize_dataset(result)
 
 
+@router.delete("/{dataset_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_dataset(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+):
+    deleted = dataset_service.delete_dataset(db, dataset_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dataset not found",
+        )
+
+    return None
+
+
 @router.post("/{dataset_id}/test-cases/{test_case_id}")
 async def add_test_case(
     dataset_id: int,
@@ -73,7 +89,6 @@ async def add_test_case(
         )
 
     return serialize_dataset(result)
-
 
 
 @router.delete("/{dataset_id}/test-cases/{test_case_id}")

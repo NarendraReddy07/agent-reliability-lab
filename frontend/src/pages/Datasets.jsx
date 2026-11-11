@@ -1,4 +1,3 @@
-
 import { useMemo, useState } from "react";
 import {
   useMutation,
@@ -51,7 +50,11 @@ function Modal({ title, onClose, children }) {
       >
         <div className="modal-heading">
           <h2>{title}</h2>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
+          <button
+            className="icon-button"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={19} />
           </button>
         </div>
@@ -102,7 +105,11 @@ function DatasetForm({ onSubmit, loading, onCancel }) {
       </label>
 
       <div className="modal-actions">
-        <button type="button" className="secondary-button" onClick={onCancel}>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={onCancel}
+        >
           Cancel
         </button>
         <button className="primary-button" disabled={loading}>
@@ -193,7 +200,11 @@ function TestCaseForm({ onSubmit, loading, onCancel }) {
       </label>
 
       <div className="modal-actions">
-        <button type="button" className="secondary-button" onClick={onCancel}>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={onCancel}
+        >
           Cancel
         </button>
         <button className="primary-button" disabled={loading}>
@@ -263,6 +274,26 @@ export default function Datasets() {
     onError: (error) => toast.error(getApiError(error)),
   });
 
+  const deleteDataset = useMutation({
+    mutationFn: async (datasetId) => {
+      await api.delete(`/datasets/${datasetId}`);
+      return datasetId;
+    },
+    onSuccess: async (deletedId) => {
+      if (selectedId === deletedId) {
+        setSelectedId(null);
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      await queryClient.invalidateQueries({ queryKey: ["test-cases"] });
+
+      toast.success("Dataset deleted successfully");
+    },
+    onError: (error) => {
+      toast.error(getApiError(error));
+    },
+  });
+
   const createTestCase = useMutation({
     mutationFn: async (data) => (await api.post("/test-cases/", data)).data,
     onSuccess: async (testCase) => {
@@ -273,6 +304,7 @@ export default function Datasets() {
           await api.post(
             `/datasets/${selectedId}/test-cases/${testCase.id}`
           );
+
           await queryClient.invalidateQueries({ queryKey: ["datasets"] });
           toast.success("Test case created and added to dataset");
         } catch (error) {
@@ -291,9 +323,11 @@ export default function Datasets() {
 
   const addTestCase = useMutation({
     mutationFn: async (testCaseId) =>
-      (await api.post(
-        `/datasets/${selectedId}/test-cases/${testCaseId}`
-      )).data,
+      (
+        await api.post(
+          `/datasets/${selectedId}/test-cases/${testCaseId}`
+        )
+      ).data,
     onSuccess: () => {
       invalidateData();
       toast.success("Test case added to dataset");
@@ -303,15 +337,30 @@ export default function Datasets() {
 
   const removeTestCase = useMutation({
     mutationFn: async (testCaseId) =>
-      (await api.delete(
-        `/datasets/${selectedId}/test-cases/${testCaseId}`
-      )).data,
+      (
+        await api.delete(
+          `/datasets/${selectedId}/test-cases/${testCaseId}`
+        )
+      ).data,
     onSuccess: () => {
       invalidateData();
       toast.success("Test case removed from dataset");
     },
     onError: (error) => toast.error(getApiError(error)),
   });
+
+  function handleDeleteDataset(dataset) {
+    const confirmed = window.confirm(
+      `Delete "${dataset.name}"?\n\n` +
+      "Its evaluation history and dataset associations will be deleted. " +
+      "The reusable test cases will remain in your library. " +
+      "This action cannot be undone."
+    );
+
+    if (confirmed) {
+      deleteDataset.mutate(dataset.id);
+    }
+  }
 
   if (datasetsQuery.isLoading || testCasesQuery.isLoading) {
     return (
@@ -323,6 +372,7 @@ export default function Datasets() {
             <p>Loading your datasets and test-case library...</p>
           </div>
         </div>
+
         <section className="panel dataset-loading">
           <div className="skeleton skeleton-line" />
           <div className="skeleton skeleton-value" />
@@ -342,6 +392,7 @@ export default function Datasets() {
             <div className="eyebrow">WORKSPACE</div>
             <h1>Dataset Management</h1>
           </div>
+
           <button
             className="secondary-button"
             onClick={() => {
@@ -352,6 +403,7 @@ export default function Datasets() {
             <RefreshCw size={16} /> Retry
           </button>
         </div>
+
         <div className="panel error-panel">
           <AlertCircle size={22} />
           <div>
@@ -385,6 +437,7 @@ export default function Datasets() {
           >
             <RefreshCw size={16} /> Refresh
           </button>
+
           <button
             className="primary-button"
             onClick={() => setModal("dataset")}
@@ -400,17 +453,20 @@ export default function Datasets() {
           <span>Total datasets</span>
           <strong>{datasets.length}</strong>
         </div>
+
         <div className="panel dataset-summary-card">
           <FilePlus2 size={20} />
           <span>Test-case library</span>
           <strong>{testCases.length}</strong>
         </div>
+
         <div className="panel dataset-summary-card">
           <Check size={20} />
           <span>Assigned test cases</span>
           <strong>
             {datasets.reduce(
-              (total, dataset) => total + (dataset.test_case_ids?.length ?? 0),
+              (total, dataset) =>
+                total + (dataset.test_case_ids?.length ?? 0),
               0
             )}
           </strong>
@@ -449,12 +505,14 @@ export default function Datasets() {
                 <div className="dataset-list-icon">
                   <Database size={18} />
                 </div>
+
                 <div className="dataset-list-info">
                   <strong>{dataset.name}</strong>
                   <span>
                     {dataset.test_case_ids?.length ?? 0} test cases
                   </span>
                 </div>
+
                 <ChevronRight size={17} />
               </button>
             ))}
@@ -477,6 +535,7 @@ export default function Datasets() {
               <span>
                 Choose a dataset from the list to manage its test cases.
               </span>
+
               <button
                 className="primary-button"
                 onClick={() => setModal("dataset")}
@@ -488,10 +547,13 @@ export default function Datasets() {
             <>
               <div className="dataset-detail-heading">
                 <div>
-                  <div className="eyebrow">DATASET #{selectedDataset.id}</div>
+                  <div className="eyebrow">
+                    DATASET #{selectedDataset.id}
+                  </div>
                   <h2>{selectedDataset.name}</h2>
                   <p>{selectedDataset.description}</p>
                 </div>
+
                 <span className="dataset-count">
                   {selectedDataset.test_case_ids?.length ?? 0} test cases
                 </span>
@@ -504,6 +566,19 @@ export default function Datasets() {
                 >
                   <FilePlus2 size={16} /> New test case
                 </button>
+
+                <button
+                  className="secondary-button"
+                  onClick={() => handleDeleteDataset(selectedDataset)}
+                  disabled={deleteDataset.isPending}
+                  style={{
+                    color: "var(--danger, #ef4444)",
+                    borderColor: "var(--danger, #ef4444)",
+                  }}
+                >
+                  <Trash2 size={16} />
+                  {deleteDataset.isPending ? "Deleting..." : "Delete dataset"}
+                </button>
               </div>
 
               <div className="dataset-section">
@@ -514,8 +589,8 @@ export default function Datasets() {
                   </div>
                 </div>
 
-                {testCases.filter((item) => assignedIds.has(item.id)).length ===
-                0 ? (
+                {testCases.filter((item) => assignedIds.has(item.id))
+                  .length === 0 ? (
                   <div className="dataset-empty-state">
                     <FilePlus2 size={24} />
                     <strong>This dataset is empty</strong>
@@ -526,7 +601,10 @@ export default function Datasets() {
                     {testCases
                       .filter((item) => assignedIds.has(item.id))
                       .map((testCase) => (
-                        <article className="assigned-case" key={testCase.id}>
+                        <article
+                          className="assigned-case"
+                          key={testCase.id}
+                        >
                           <div className="assigned-case-info">
                             <div className="assigned-case-title">
                               <strong>{testCase.name}</strong>
@@ -534,11 +612,14 @@ export default function Datasets() {
                                 {testCase.category?.replaceAll("_", " ")}
                               </span>
                             </div>
+
                             <p>{testCase.description}</p>
+
                             <span className="case-id">
                               Test case #{testCase.id}
                             </span>
                           </div>
+
                           <button
                             className="icon-button danger"
                             title="Remove from dataset"
@@ -547,7 +628,8 @@ export default function Datasets() {
                             onClick={() => {
                               if (
                                 window.confirm(
-                                  `Remove "${testCase.name}" from this dataset? The test case will remain in your library.`
+                                  `Remove "${testCase.name}" from this dataset? ` +
+                                  "The test case will remain in your library."
                                 )
                               ) {
                                 removeTestCase.mutate(testCase.id);
@@ -568,10 +650,13 @@ export default function Datasets() {
                     <h3>Test-case library</h3>
                     <p>Add existing test cases to this dataset.</p>
                   </div>
+
                   <select
                     className="category-filter"
                     value={categoryFilter}
-                    onChange={(event) => setCategoryFilter(event.target.value)}
+                    onChange={(event) =>
+                      setCategoryFilter(event.target.value)
+                    }
                     aria-label="Filter by category"
                   >
                     <option value="all">All categories</option>
@@ -595,7 +680,10 @@ export default function Datasets() {
                 ) : (
                   <div className="library-case-list">
                     {availableCases.map((testCase) => (
-                      <article className="library-case" key={testCase.id}>
+                      <article
+                        className="library-case"
+                        key={testCase.id}
+                      >
                         <div className="assigned-case-info">
                           <div className="assigned-case-title">
                             <strong>{testCase.name}</strong>
@@ -603,11 +691,14 @@ export default function Datasets() {
                               {testCase.category?.replaceAll("_", " ")}
                             </span>
                           </div>
+
                           <p>{testCase.description}</p>
+
                           <span className="case-id">
                             Test case #{testCase.id}
                           </span>
                         </div>
+
                         <button
                           className="secondary-button add-case-button"
                           disabled={addTestCase.isPending}
@@ -626,7 +717,10 @@ export default function Datasets() {
       </section>
 
       {modal === "dataset" && (
-        <Modal title="Create dataset" onClose={() => setModal(null)}>
+        <Modal
+          title="Create dataset"
+          onClose={() => setModal(null)}
+        >
           <DatasetForm
             loading={createDataset.isPending}
             onCancel={() => setModal(null)}
@@ -636,7 +730,10 @@ export default function Datasets() {
       )}
 
       {modal === "test-case" && (
-        <Modal title="Create test case" onClose={() => setModal(null)}>
+        <Modal
+          title="Create test case"
+          onClose={() => setModal(null)}
+        >
           <TestCaseForm
             loading={createTestCase.isPending}
             onCancel={() => setModal(null)}
