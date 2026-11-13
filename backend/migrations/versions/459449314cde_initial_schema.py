@@ -89,7 +89,6 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['test_case_id'], ['test_cases.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_evaluation_case_results_execution_id'), 'evaluation_case_results', ['execution_id'], unique=False)
     op.create_index(op.f('ix_evaluation_case_results_id'), 'evaluation_case_results', ['id'], unique=False)
     op.create_table('scheduled_benchmarks',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -126,7 +125,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_scheduled_benchmarks_id'), table_name='scheduled_benchmarks')
     op.drop_table('scheduled_benchmarks')
     op.drop_index(op.f('ix_evaluation_case_results_id'), table_name='evaluation_case_results')
-    op.drop_index(op.f('ix_evaluation_case_results_execution_id'), table_name='evaluation_case_results')
     op.drop_table('evaluation_case_results')
     op.drop_index(op.f('ix_evaluation_runs_id'), table_name='evaluation_runs')
     op.drop_table('evaluation_runs')

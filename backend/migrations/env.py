@@ -7,15 +7,37 @@ from sqlalchemy import engine_from_config, pool
 
 load_dotenv()
 
-from backend.app.database import Base, DATABASE_URL
-from backend.app.models import *  # noqa: F401,F403
-from backend.app.scheduled_models import ScheduledBenchmark  # noqa: F401
+from backend.app.database import Base
+from backend.app import models  # noqa: F401
+from backend.app import scheduled_models  # noqa: F401
 
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+
+# Always use the direct Neon connection for migrations.
+DATABASE_URL = (
+    os.getenv("DATABASE_URL_UNPOOLED")
+    or os.getenv("DATABASE_URL")
+)
+
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL_UNPOOLED or DATABASE_URL must be configured."
+    )
+
+# Explicitly select Psycopg 3.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgres://", "postgresql+psycopg://", 1
+    )
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgresql://", "postgresql+psycopg://", 1
+    )
 
 config.set_main_option(
     "sqlalchemy.url",
@@ -45,17 +67,18 @@ def run_migrations_online():
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-        )
+    try:
+        with connectable.connect() as connection:
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                compare_type=True,
+            )
 
-        with context.begin_transaction():
-            context.run_migrations()
-
-    connectable.dispose()
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        connectable.dispose()
 
 
 if context.is_offline_mode():
