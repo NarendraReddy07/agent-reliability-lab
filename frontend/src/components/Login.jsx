@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import api, {
   AUTH_STORAGE_KEY,
+  REFRESH_STORAGE_KEY,
   USERNAME_STORAGE_KEY,
   getApiError,
 } from "../lib/api";
@@ -34,33 +35,27 @@ export default function Login({ onAuthenticated }) {
     setError("");
 
     try {
-      const response = await api.post(
-        "/auth/login",
-        null,
-        {
-          auth: {
-            username: username.trim(),
-            password,
-          },
-        }
-      );
+      const response = await api.post("/auth/login", {
+        username: username.trim(),
+        password,
+      });
 
-      const { access_token, username: authenticatedUsername } =
-        response.data;
+      const {
+        access_token,
+        refresh_token,
+        username: authenticatedUsername,
+      } = response.data;
 
-      if (!access_token) {
-        throw new Error("The server did not return an access token.");
+      if (!access_token || !refresh_token || !authenticatedUsername) {
+        throw new Error("The server returned an incomplete authentication response.");
       }
 
       sessionStorage.setItem(AUTH_STORAGE_KEY, access_token);
-      sessionStorage.setItem(
-        USERNAME_STORAGE_KEY,
-        authenticatedUsername
-      );
+      sessionStorage.setItem(REFRESH_STORAGE_KEY, refresh_token);
+      sessionStorage.setItem(USERNAME_STORAGE_KEY, authenticatedUsername);
 
       setPassword("");
       onAuthenticated();
-
       toast.success("Authentication successful.");
     } catch (requestError) {
       setError(getApiError(requestError));

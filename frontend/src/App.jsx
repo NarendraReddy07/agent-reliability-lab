@@ -1,10 +1,30 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import { Routes, Route, Link } from "react-router-dom";
-import { Home, ArrowLeft, LoaderCircle } from "lucide-react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  Routes,
+  Route,
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import {
+  Home,
+  ArrowLeft,
+  LoaderCircle,
+} from "lucide-react";
 
 import AppLayout from "./components/AppLayout";
 import Login from "./components/Login";
-import { AUTH_STORAGE_KEY } from "./lib/api";
+import {
+  AUTH_STORAGE_KEY,
+  REFRESH_STORAGE_KEY,
+  USERNAME_STORAGE_KEY,
+} from "./lib/api";
 
 const Overview = lazy(() => import("./pages/Overview"));
 const Agents = lazy(() => import("./pages/Agents"));
@@ -16,6 +36,37 @@ const TraceExplorer = lazy(() => import("./pages/TraceExplorer"));
 const Schedules = lazy(() => import("./pages/Schedules"));
 const Profile = lazy(() => import("./pages/Profile"));
 const AccountSettings = lazy(() => import("./pages/AccountSettings"));
+
+const VALID_LANDING_PAGES = [
+  "/",
+  "/agents",
+  "/datasets",
+  "/evaluations",
+  "/analytics",
+  "/executions",
+  "/traces",
+  "/schedules",
+];
+
+function clearAuthenticationSession() {
+  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  sessionStorage.removeItem(REFRESH_STORAGE_KEY);
+  sessionStorage.removeItem(USERNAME_STORAGE_KEY);
+}
+
+function getDefaultLandingPage() {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem("arl-account-preferences") || "{}"
+    );
+
+    return VALID_LANDING_PAGES.includes(saved.defaultPage)
+      ? saved.defaultPage
+      : "/";
+  } catch {
+    return "/";
+  }
+}
 
 function PageLoading() {
   return (
@@ -63,6 +114,9 @@ function NotFound() {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [theme, setTheme] = useState(
     () => localStorage.getItem("arl-theme") || "dark"
   );
@@ -71,30 +125,62 @@ export default function App() {
     () => Boolean(sessionStorage.getItem(AUTH_STORAGE_KEY))
   );
 
+  const landingPageApplied = useRef(false);
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("arl-theme", theme);
   }, [theme]);
 
   useEffect(() => {
+    if (
+      authenticated &&
+      location.pathname === "/" &&
+      !landingPageApplied.current
+    ) {
+      landingPageApplied.current = true;
+
+      const defaultPage = getDefaultLandingPage();
+
+      if (defaultPage !== "/") {
+        navigate(defaultPage, { replace: true });
+      }
+    }
+  }, [authenticated, location.pathname, navigate]);
+
+  useEffect(() => {
     function handleAuthExpired() {
+      clearAuthenticationSession();
       setAuthenticated(false);
+      landingPageApplied.current = false;
     }
 
     window.addEventListener("arl-auth-expired", handleAuthExpired);
 
     return () => {
-      window.removeEventListener("arl-auth-expired", handleAuthExpired);
+      window.removeEventListener(
+        "arl-auth-expired",
+        handleAuthExpired
+      );
     };
   }, []);
 
+  function handleAuthenticated() {
+    landingPageApplied.current = true;
+    setAuthenticated(true);
+
+    navigate(getDefaultLandingPage(), { replace: true });
+  }
+
   function handleLogout() {
-    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    clearAuthenticationSession();
     setAuthenticated(false);
+    landingPageApplied.current = false;
+    navigate("/", { replace: true });
   }
 
   if (!authenticated) {
-    return <Login onAuthenticated={() => setAuthenticated(true)} />;
+    return <Login onAuthenticated={handleAuthenticated} />;
   }
 
   return (
@@ -121,7 +207,10 @@ export default function App() {
           <Route
             path="settings"
             element={
-              <AccountSettings theme={theme} setTheme={setTheme} />
+              <AccountSettings
+                theme={theme}
+                setTheme={setTheme}
+              />
             }
           />
           <Route path="*" element={<NotFound />} />

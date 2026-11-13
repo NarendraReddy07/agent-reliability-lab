@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
 from backend.app.api.agents import router as agents_router
 from backend.app.api.datasets import router as datasets_router
@@ -12,56 +12,26 @@ from backend.app.api.evaluations import router as evaluations_router
 from backend.app.api.schedules import router as schedules_router
 from backend.app.api.test_cases import router as test_cases_router
 from backend.app.database import Base, engine
+from backend.app import models  # noqa: F401
 from backend.app import scheduled_models  # noqa: F401
 from backend.app.scheduler import benchmark_scheduler_loop
 
 
-Base.metadata.create_all(bind=engine)
+# Local development and tests retain automatic table creation.
+# Production should set AUTO_CREATE_TABLES=false and use Alembic.
+auto_create_tables = (
+    os.getenv("AUTO_CREATE_TABLES", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+
+if auto_create_tables:
+    Base.metadata.create_all(bind=engine)
 
 
-def migrate_evaluation_linkage():
-    """Add nullable linkage columns to existing databases."""
-    inspector = inspect(engine)
-    tables = set(inspector.get_table_names())
-
-    if "evaluation_runs" in tables:
-        columns = {
-            column["name"]
-            for column in inspector.get_columns("evaluation_runs")
-        }
-        if "agent_name" not in columns:
-            with engine.begin() as connection:
-                connection.execute(
-                    text(
-                        "ALTER TABLE evaluation_runs "
-                        "ADD COLUMN agent_name VARCHAR(120)"
-                    )
-                )
-
-    if "evaluation_case_results" in tables:
-        columns = {
-            column["name"]
-            for column in inspector.get_columns(
-                "evaluation_case_results"
-            )
-        }
-        if "execution_id" not in columns:
-            with engine.begin() as connection:
-                connection.execute(
-                    text(
-                        "ALTER TABLE evaluation_case_results "
-                        "ADD COLUMN execution_id INTEGER "
-                        "REFERENCES agent_executions(id)"
-                    )
-                )
-
-
-migrate_evaluation_linkage()
-
-
-scheduler_enabled = os.getenv(
-    "ENABLE_SCHEDULER", "true"
-).strip().lower() in {"1", "true", "yes", "on"}
+scheduler_enabled = (
+    os.getenv("ENABLE_SCHEDULER", "true").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 
 
 @asynccontextmanager

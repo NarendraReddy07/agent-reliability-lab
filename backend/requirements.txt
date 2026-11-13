@@ -6,3 +6,5 @@ httpx
 sqlalchemy
 psycopg[binary]>=3.2,<4
 PyJWT>=2.10,<3
+python-dotenv>=1.0,<2
+alembic>=1.13,<2

@@ -1,23 +1,36 @@
 import os
 import hmac
-import time
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from dotenv import load_dotenv
+from fastapi import HTTPException, status
+from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+load_dotenv()
+
 from backend.app.main import app
 
 
-security = HTTPBasic(auto_error=False)
-
 TOKEN_ALGORITHM = "HS256"
 TOKEN_ISSUER = "agent-reliability-lab"
-TOKEN_LIFETIME_MINUTES = 30
+ACCESS_TOKEN_MINUTES = 30
+REFRESH_TOKEN_DAYS = 7
+
+LOGIN_PATH = "/api/auth/login"
+REFRESH_PATH = "/api/auth/refresh"
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 def get_auth_config():
@@ -40,49 +53,53 @@ def get_auth_config():
     return username, password, secret
 
 
-def credentials_are_valid(credentials):
-    if credentials is None:
-        return False
-
-    try:
-        expected_username, expected_password, _ = get_auth_config()
-    except HTTPException:
-        return False
+def credentials_are_valid(username, password):
+    expected_username, expected_password, _ = get_auth_config()
 
     username_valid = hmac.compare_digest(
-        credentials.username.encode("utf-8"),
+        username.encode("utf-8"),
         expected_username.encode("utf-8"),
     )
-
     password_valid = hmac.compare_digest(
-        credentials.password.encode("utf-8"),
+        password.encode("utf-8"),
         expected_password.encode("utf-8"),
     )
 
     return username_valid and password_valid
 
 
-def create_access_token(username):
+def create_token(username, token_use, lifetime):
     _, _, secret = get_auth_config()
 
     now = datetime.now(timezone.utc)
-    expires = now + timedelta(minutes=TOKEN_LIFETIME_MINUTES)
-
     payload = {
         "sub": username,
         "iss": TOKEN_ISSUER,
         "iat": now,
-        "exp": expires,
+        "exp": now + lifetime,
+        "token_use": token_use,
     }
 
-    return jwt.encode(
-        payload,
-        secret,
-        algorithm=TOKEN_ALGORITHM,
+    return jwt.encode(payload, secret, algorithm=TOKEN_ALGORITHM)
+
+
+def create_access_token(username):
+    return create_token(
+        username,
+        "access",
+        timedelta(minutes=ACCESS_TOKEN_MINUTES),
     )
 
 
-def verify_access_token(token):
+def create_refresh_token(username):
+    return create_token(
+        username,
+        "refresh",
+        timedelta(days=REFRESH_TOKEN_DAYS),
+    )
+
+
+def verify_token(token, expected_use):
     _, _, secret = get_auth_config()
 
     payload = jwt.decode(
@@ -90,44 +107,65 @@ def verify_access_token(token):
         secret,
         algorithms=[TOKEN_ALGORITHM],
         issuer=TOKEN_ISSUER,
-        options={
-            "require": ["sub", "iat", "exp", "iss"],
-        },
+        options={"require": ["sub", "iat", "exp", "iss", "token_use"]},
     )
 
     username = payload.get("sub")
 
-    if not username:
-        raise jwt.InvalidTokenError("Token subject is missing.")
+    if not username or payload.get("token_use") != expected_use:
+        raise jwt.InvalidTokenError("Invalid token type or subject.")
 
     return username
 
 
-async def authenticate_admin(
-    credentials: HTTPBasicCredentials | None = Depends(security),
-):
+def verify_access_token(token):
+    return verify_token(token, "access")
+
+
+def verify_refresh_token(token):
+    return verify_token(token, "refresh")
+
+
+@app.post("/api/auth/login")
+async def admin_login(credentials: LoginRequest):
     get_auth_config()
 
-    if not credentials_are_valid(credentials):
+    if not credentials_are_valid(
+        credentials.username,
+        credentials.password,
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
-            headers={"WWW-Authenticate": "Basic"},
         )
 
-    token = create_access_token(credentials.username)
-
     return {
-        "access_token": token,
+        "access_token": create_access_token(credentials.username),
+        "refresh_token": create_refresh_token(credentials.username),
         "token_type": "bearer",
-        "expires_in": TOKEN_LIFETIME_MINUTES * 60,
+        "expires_in": ACCESS_TOKEN_MINUTES * 60,
+        "refresh_expires_in": REFRESH_TOKEN_DAYS * 24 * 60 * 60,
         "username": credentials.username,
     }
 
 
-@app.post("/api/auth/login")
-async def admin_login(authenticated: dict = Depends(authenticate_admin)):
-    return authenticated
+@app.post("/api/auth/refresh")
+async def refresh_access_token(request: RefreshRequest):
+    try:
+        username = verify_refresh_token(request.refresh_token)
+    except HTTPException:
+        raise
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh session expired or invalid. Please sign in again.",
+        )
+
+    return {
+        "access_token": create_access_token(username),
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_MINUTES * 60,
+    }
 
 
 @app.get("/api/auth/me")
@@ -143,6 +181,8 @@ async def current_admin(request: Request):
 
     try:
         username = verify_access_token(parts[1])
+    except HTTPException:
+        raise
     except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -159,7 +199,7 @@ async def current_admin(request: Request):
 class AdminWriteProtectionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-            if request.url.path != "/api/auth/login":
+            if request.url.path not in {LOGIN_PATH, REFRESH_PATH}:
                 try:
                     authorization = request.headers.get(
                         "Authorization", ""
@@ -185,7 +225,6 @@ class AdminWriteProtectionMiddleware(BaseHTTPMiddleware):
                         content={
                             "detail": "Session expired or invalid. Please sign in again."
                         },
-                        headers={"WWW-Authenticate": "Bearer"},
                     )
 
                 except Exception:
