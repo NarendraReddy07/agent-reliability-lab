@@ -14,6 +14,7 @@ import api, {
   REFRESH_STORAGE_KEY,
   USERNAME_STORAGE_KEY,
   getApiError,
+  waitForBackend,
 } from "../lib/api";
 
 export default function Login({ onAuthenticated }) {
@@ -21,6 +22,7 @@ export default function Login({ onAuthenticated }) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState("");
   const [error, setError] = useState("");
 
   async function handleSubmit(event) {
@@ -33,8 +35,11 @@ export default function Login({ onAuthenticated }) {
 
     setLoading(true);
     setError("");
+    setConnectionStatus("Checking backend availability...");
 
     try {
+      await waitForBackend(setConnectionStatus);
+
       const response = await api.post("/auth/login", {
         username: username.trim(),
         password,
@@ -55,10 +60,12 @@ export default function Login({ onAuthenticated }) {
       sessionStorage.setItem(USERNAME_STORAGE_KEY, authenticatedUsername);
 
       setPassword("");
+      setConnectionStatus("");
       onAuthenticated();
       toast.success("Authentication successful.");
     } catch (requestError) {
       setError(getApiError(requestError));
+      setConnectionStatus("");
     } finally {
       setLoading(false);
     }
@@ -94,6 +101,7 @@ export default function Login({ onAuthenticated }) {
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               required
+              disabled={loading}
             />
           </div>
 
@@ -108,16 +116,42 @@ export default function Login({ onAuthenticated }) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
+              disabled={loading}
             />
             <button
               type="button"
               className="login-password-toggle"
               onClick={() => setShowPassword((current) => !current)}
               aria-label={showPassword ? "Hide password" : "Show password"}
+              disabled={loading}
             >
               {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </div>
+
+          {connectionStatus && (
+            <div
+              className="login-connection-status"
+              role="status"
+              aria-live="polite"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 9,
+                marginTop: 7,
+                padding: "10px 12px",
+                border: "1px solid rgba(99, 102, 241, 0.25)",
+                borderRadius: 8,
+                background: "rgba(99, 102, 241, 0.08)",
+                color: "var(--text-muted, #94a3b8)",
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              <Activity size={15} className="spin" />
+              <span>{connectionStatus}</span>
+            </div>
+          )}
 
           {error && (
             <div className="login-error" role="alert">
@@ -130,7 +164,7 @@ export default function Login({ onAuthenticated }) {
             className="login-submit"
             disabled={loading}
           >
-            {loading ? "Authenticating..." : "Sign in"}
+            {loading ? "Waking up backend..." : "Sign in"}
           </button>
         </form>
 

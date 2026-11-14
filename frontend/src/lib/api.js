@@ -5,10 +5,13 @@ export const REFRESH_STORAGE_KEY = "arl-admin-refresh-token";
 export const USERNAME_STORAGE_KEY = "arl-admin-username";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+const REQUEST_TIMEOUT_MS = 90000;
+const HEALTH_CHECK_TIMEOUT_MS = 10000;
+const BACKEND_STARTUP_TIMEOUT_MS = 90000;
 
 const api = axios.create({
   baseURL,
-  timeout: 15000,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: {
     "Content-Type": "application/json",
   },
@@ -21,6 +24,45 @@ function clearSession() {
   sessionStorage.removeItem(REFRESH_STORAGE_KEY);
   sessionStorage.removeItem(USERNAME_STORAGE_KEY);
   window.dispatchEvent(new Event("arl-auth-expired"));
+}
+
+/**
+ * Render free instances may sleep after inactivity. Poll the public health
+ * endpoint before login so the user sees a useful waking-up state instead of
+ * a misleading connection failure.
+ */
+export async function waitForBackend(onStatus = () => {}) {
+  const deadline = Date.now() + BACKEND_STARTUP_TIMEOUT_MS;
+  let attempt = 0;
+
+  while (Date.now() < deadline) {
+    attempt += 1;
+    onStatus(
+      attempt === 1
+        ? "Connecting to the backend..."
+        : "The backend is waking up. This can take up to a minute on the free hosting plan."
+    );
+
+    try {
+      const response = await api.get("/health", {
+        timeout: HEALTH_CHECK_TIMEOUT_MS,
+      });
+
+      if (response.data?.status === "healthy") {
+        onStatus("Backend ready. Signing you in...");
+        return true;
+      }
+    } catch {
+      // A sleeping instance, an in-progress startup, or a temporarily
+      // unavailable database can all make the health check fail. Retry.
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 2500));
+  }
+
+  throw new Error(
+    "The backend did not become ready within 90 seconds. Please try again in a moment."
+  );
 }
 
 api.interceptors.request.use((config) => {
@@ -71,7 +113,7 @@ api.interceptors.response.use(
           .post(
             `${baseURL}/auth/refresh`,
             { refresh_token: refreshToken },
-            { timeout: 15000 }
+            { timeout: REQUEST_TIMEOUT_MS }
           )
           .then((response) => {
             const newAccessToken = response.data?.access_token;
@@ -110,11 +152,11 @@ export function getApiError(error) {
   }
 
   if (error.code === "ECONNABORTED") {
-    return "The request timed out. Please try again.";
+    return "The backend is taking longer than expected to respond. Please retry.";
   }
 
   if (!error.response) {
-    return "Unable to connect to the backend. Check that FastAPI is running.";
+    return "Unable to reach the backend. It may still be waking up. Please retry.";
   }
 
   return error.message || "Something went wrong.";
